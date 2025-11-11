@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADI Calculator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjs@11.10.0/lib/browser/math.js"></script>
+<style>
+body { font-family: 'Inter', sans-serif; background: #f0f4f8; }
+#chat-history::-webkit-scrollbar { width: 6px; }
+#chat-history::-webkit-scrollbar-thumb { background-color: #10b981; border-radius: 3px; }
+#chat-history::-webkit-scrollbar-track { background-color: #e5e7eb; }
+.typing-dot { width: 6px; height: 6px; background-color: #10b981; border-radius: 50%; animation: bounce 1s infinite; margin-right:2px;}
+@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+</style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+<div class="flex flex-col w-full max-w-2xl h-screen bg-white rounded-xl shadow-lg overflow-hidden">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-emerald-500 to-green-600 text-white p-4 shadow">
+        <h1 class="text-2xl font-bold text-center">ADI Calculator</h1>
+        <p class="text-center text-sm text-emerald-100">Ask anything & get explanations</p>
+    </header>
+
+    <!-- Chat History -->
+    <div id="chat-history" class="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50">
+        <div class="flex justify-start">
+            <div class="bg-emerald-100 text-gray-800 p-3 rounded-xl rounded-bl-none shadow max-w-xs lg:max-w-md">
+                <p class="text-sm">Hello! I can solve scientific math problems and explain them. Just ask mathamethical questions. It's not perfect. Try typing:<br>
+                • "Solve 10 + √16"<br>
+                • "Factorial of 5"<br>
+                • "sin 45 degrees"</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="p-3 bg-gray-100 border-t border-gray-200 flex items-center space-x-3">
+        <input type="text" id="user-input" placeholder="Type your math question..." class="flex-1 p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <button id="send-button" class="bg-emerald-600 text-white px-5 py-3 rounded-lg hover:bg-emerald-700 transition">Send</button>
+    </footer>
+</div>
+
+<script>
+const chatHistory = document.getElementById('chat-history');
+const userInput = document.getElementById('user-input');
+const sendButton = document.getElementById('send-button');
+
+// Event listeners
+sendButton.addEventListener('click', handleSend);
+userInput.addEventListener('keydown', e => {
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); }
+});
+
+// Add message bubble
+function addMessage(msg,sender){
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('flex');
+    const bubble = document.createElement('div');
+    bubble.classList.add('p-3','rounded-xl','shadow','max-w-xs','lg:max-w-md','break-words','whitespace-pre-wrap');
+    if(sender==='user'){ wrapper.classList.add('justify-end'); bubble.classList.add('bg-white','text-gray-800','rounded-br-none','border','border-gray-200'); }
+    else{ wrapper.classList.add('justify-start'); bubble.classList.add('bg-emerald-100','text-gray-800','rounded-bl-none'); }
+    bubble.innerHTML=msg;
+    wrapper.appendChild(bubble);
+    chatHistory.appendChild(wrapper);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+// Show typing indicator
+function showTyping(){
+    const wrapper = document.createElement('div');
+    wrapper.id='typing-indicator';
+    wrapper.classList.add('flex','justify-start','space-x-1','mb-1');
+    for(let i=0;i<3;i++){
+        const dot = document.createElement('div');
+        dot.classList.add('typing-dot');
+        dot.style.animationDelay = `${i*0.2}s`;
+        wrapper.appendChild(dot);
+    }
+    chatHistory.appendChild(wrapper);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+// Remove typing indicator
+function removeTyping(){
+    const elem = document.getElementById('typing-indicator');
+    if(elem) elem.remove();
+}
+
+// --- Parse and convert natural language to math.js expression ---
+function parseExpression(input){
+    let expr = input.toLowerCase();
+
+    // Remove filler words
+    expr = expr.replace(/^(solve|calculate|compute|what is)\s*/i,'');
+
+    // Square root
+    expr = expr.replace(/√|square root of\s*/g,'sqrt(');
+    expr = expr.replace(/(\d+(\.\d+)?)/g,(m)=>m); // leave numbers as-is
+
+    // Factorials
+    expr = expr.replace(/(\d+)\s*!/g,'factorial($1)');
+    expr = expr.replace(/factorial of (\d+)/g,'factorial($1)');
+
+    // Operators
+    expr = expr.replace(/plus/g,'+').replace(/minus/g,'-').replace(/times|multiplied by/g,'*').replace(/divided by/g,'/').replace(/to the power of/g,'^');
+
+    // Trig in degrees
+    expr = expr.replace(/(sin|cos|tan)\s*(\d+(\.\d+)?)\s*degrees?/g,(m,f,d)=>`${f}(${d}*pi/180)`);
+
+    // Close parentheses for sqrt if missing
+    const openCount = (expr.match(/\(/g)||[]).length;
+    const closeCount = (expr.match(/\)/g)||[]).length;
+    for(let i=0;i<openCount-closeCount;i++){ expr += ')'; }
+
+    return expr;
+}
+
+// --- Explain the calculation ---
+function explainExpression(expr){
+    let explanation='';
+    if(expr.includes('factorial')) explanation='Factorial: multiply all integers ≤ n. E.g., 5! = 5×4×3×2×1=120.';
+    else if(expr.includes('sqrt')) explanation='Square Root: a number which multiplied by itself gives the original number.';
+    else if(expr.includes('^')) explanation='Exponentiation: x^y means x multiplied by itself y times.';
+    else if(expr.includes('sin')||expr.includes('cos')||expr.includes('tan')) explanation='Trigonometry: angles converted from degrees to radians before calculation.';
+    else explanation='Arithmetic: standard calculations with +, -, *, /, ^.';
+    return explanation;
+}
+
+// --- Generate AI response ---
+function generateResponse(input){
+    const expr = parseExpression(input);
+    try{
+        const result = math.evaluate(expr);
+        const explanation = explainExpression(expr);
+        return `<strong>Expression:</strong> <code>${expr}</code>\n<strong>Solution:</strong> ${result}\n<strong>Explanation:</strong> ${explanation}`;
+    }catch(e){
+        return `<span class="text-red-600">Error: Could not understand or solve your query.</span>`;
+    }
+}
+
+// --- Handle send ---
+function handleSend(){
+    const input = userInput.value.trim();
+    if(!input) return;
+    addMessage(input,'user');
+    userInput.value='';
+    showTyping();
+    setTimeout(()=>{
+        removeTyping();
+        const response = generateResponse(input);
+        addMessage(response,'ai');
+    },500);
+}
+</script>
+
+</body>
+</html>
